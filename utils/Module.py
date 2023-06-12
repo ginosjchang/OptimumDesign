@@ -21,7 +21,7 @@ class Module:
         return None
     def parameters(self):
         return None
-    def reset(self):
+    def reset(self, isnm=False):
         pass
     def set_param(self, x):
         pass

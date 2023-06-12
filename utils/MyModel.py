@@ -16,9 +16,16 @@ class Dense(Module):
     def __len__(self):
         return self.n
 
-    def reset(self):
+    def __str__(self):
+        s = f"{self.__class__.__name__}\r\t\t(1, {self.in_len})\t\t(1, {self.out_len})\n"
+        return s
+
+    def reset(self, isnm=False):
         self.w = np.random.randn(self.out_len, self.in_len)
-        self.b = np.zeros((self.out_len, 1))
+        if isnm:
+            self.b = np.random.randn(self.out_len, 1)
+        else:
+            self.b = np.zeros((self.out_len, 1))
     
     def forward(self, x):
         return np.dot(self.w, x) + self.b
@@ -55,7 +62,7 @@ class MyModel(Module):
         return n
     
     def __str__(self):
-        s = ""
+        s = "\nLayer\t\tInput\t\tOutput\n"
         for layer in self.layers:
             s += layer.__str__()
         return s
@@ -86,9 +93,9 @@ class MyModel(Module):
             else: p = np.concatenate((p, layer.parameters()))
         return p
 
-    def reset(self):
+    def reset(self, isnm = False):
         for layer in self.layers:
-            layer.reset()
+            layer.reset(isnm)
         return self
 
     def set_param(self, x):

@@ -128,10 +128,10 @@ class FR:
             df1 = backward_propagation_gradient(x1)
             s1 = -1*df1 + (np.inner(df1, df1)/np.inner(self.df0, self.df0)) * self.s0
             self.s0 = s1
-            if math.dist(self.x0, x1) < 1e-4:
-                self.x0 = self.model.reset().parameters()
-                self.reset += 1
-                return forward_propagation_loss(self.x0)
+            # if math.dist(self.x0, x1) < 1e-4:
+            #     self.x0 = self.model.reset().parameters()
+            #     self.reset += 1
+            #     return forward_propagation_loss(self.x0)
             self.x0 = x1
             self.df0 = df1
             self.j += 1
@@ -151,7 +151,7 @@ class Nelder_Mead:
 
         start_points = []
         for _ in range(len(self.model) + 1):
-            start_points.append(self.model.reset().parameters())
+            start_points.append(self.model.reset(True).parameters())
         self.p = np.array(start_points)
 
     def one_epoch(self, X, Y):

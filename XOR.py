@@ -580,7 +580,167 @@ def gradient_descent_Newton_method(X, Y, n_x, n_h, n_y, loss_fn=loss_mse):
                 lam = lam/2
         return x+ lam*s
     
+def Davidon_Fletcher_Powell_method(X, Y, n_x, n_h, n_y, loss_fn=loss_mse, cc=1e-2):
+    def arr2dict(param):
+        w1 = param[:n_h*n_x].reshape(n_h,n_x)
+        b1 = param[n_h*n_x:n_h*(n_x+1)].reshape(n_h,1)
+        w2 = param[n_h*(n_x+1):n_h*((n_x+1)+n_y)].reshape(n_y,n_h)
+        b2 = param[n_h*((n_x+1)+n_y):].reshape(n_y,1)
+        parameters = { 
+            "W1": w1,
+            "B1": b1,
+            "W2": w2,
+            "B2": b2
+        }
+        return parameters
 
+    def forward_propagation_loss(param):
+        w1 = param[:n_h*n_x].reshape(n_h,n_x)
+        b1 = param[n_h*n_x:n_h*(n_x+1)].reshape(n_h,1)
+        w2 = param[n_h*(n_x+1):n_h*((n_x+1)+n_y)].reshape(n_y,n_h)
+        b2 = param[n_h*((n_x+1)+n_y):].reshape(n_y,1)
+        z1 = np.dot(w1, X) + b1
+        a1 = leaky_relu(z1)
+        z2 = np.dot(w2, a1) + b2
+        a2 = sigmoid(z2)
+        return loss_fn(a2, Y)
+    
+    def backward_propagation_gradient(param):
+        w1 = param[:n_h*n_x].reshape(n_h,n_x)
+        b1 = param[n_h*n_x:n_h*(n_x+1)].reshape(n_h,1)
+        w2 = param[n_h*(n_x+1):n_h*((n_x+1)+n_y)].reshape(n_y,n_h)
+        b2 = param[n_h*((n_x+1)+n_y):].reshape(n_y,1)
+        z1 = np.dot(w1, X) + b1
+        a1 = leaky_relu(z1)
+        z2 = np.dot(w2, a1) + b2
+        a2 = sigmoid(z2)
+        
+        # losses.append(loss_fn(a2,Y))
+        dz2 = np.multiply(d_loss_ce(a2, Y), d_sigmoid(z2))
+        dw2 = np.dot(dz2, a1.T)
+        db2 = np.sum(dz2, axis = 1, keepdims = True)
+        da1 = np.dot(w2.T, dz2)
+        dz1 = np.multiply(da1, d_leaky_relu(z1))
+        dw1 = np.dot(dz1, X.T)
+        db1 = np.sum(dz1, axis = 1, keepdims = True)
+        gradient = np.concatenate((dw1.reshape(-1),
+                                   db1.reshape(-1),
+                                   dw2.reshape(-1),
+                                   db2.reshape(-1),))
+        return gradient
+
+    def find_min(x1, v, h=0.1, cc=-1):
+        a,b = bracket(x1,v,h=h)
+        if np.sum(a) == 0.:
+            return [False,None]
+        opt = Gold_sec_nD(np.array([a,b]),cc=cc)
+        return [True,opt]
+
+    def bracket(x1, v, h=0.1):#from the book: Numerical methods in Engineering with Python
+        c = 1.618033989
+        f1 = forward_propagation_loss(x1)
+        x2 = x1 + v*h
+        f2 = forward_propagation_loss(x2)
+        # Determine downhill direction and change sign of h if needed
+        if f2 > f1:
+            h = -h
+            x2 = x1 + v*h
+            f2 = forward_propagation_loss(x2)
+            # Check if minimum between x1 - h and x1 + h
+            if f2 > f1: 
+                return x2, x1- v*h
+        # Search loop
+        for i in range (100):
+            h = c* h
+            x3 = x2+ v*h
+            f3 = forward_propagation_loss(x3)
+            if f3 > f2:
+                return x1, x3
+            x1 = x2
+            x2 = x3
+            f1 = f2
+            f2 = f3
+        print("The bracket did not include a minimum")
+        return 0., 0.
+
+    def Gold_sec_nD(intv: np.ndarray, cc=-1):
+        '''
+        use golden select method to find local minimum or maximum
+        '''
+        if cc == -1: # converge condition
+            cc = 1.0e-4
+        alf = (5**0.5 -1)/ 2 # golden ratio = 0.618... 
+        a = intv[0]
+        b = intv[1]
+        lam= a+ (1- alf)* (b- a)  # |--------|-----|--------|
+        mu = a+ alf* (b- a)       # a       lam   mu        b
+        fl = forward_propagation_loss(lam)
+        fm = forward_propagation_loss(mu) #At first, 2 function evaluations are needed
+        iter = 0
+        while float(math.dist(a,b)) > cc and iter < 500:
+            iter +=1
+            # n_iter = n_iter+1      
+            if fl > fm:           # |--------|-----|--------|
+                a = lam           # x     a(lam)  lam(mu)   b
+                lam = mu
+                fl = fm
+                mu = a+ alf* (b- a)
+                fm = forward_propagation_loss(mu)   #In the while loop, only 1 more function evalution is needed
+                # optv.append(fl)
+            else:
+                b = mu
+                mu = lam
+                fm = fl
+                lam = a+ (1- alf)* (b- a)
+                fl = forward_propagation_loss(lam)
+                # optv.append(fm)
+        if forward_propagation_loss(a) < forward_propagation_loss(b): #compare f(a) with f(b), and xopt is the one with smaller func value
+            xopt = a
+        else:
+            xopt = b
+            
+        return xopt
+
+    def matrix_multiply_2D(a, b):
+        if len(a.shape) == 1:
+            a = a.reshape(1,-1)
+        if len(b.shape) == 1:
+            b = b.reshape(-1,1)
+        res = np.zeros((a.shape[0], b.shape[1]))
+        for i in range(a.shape[0]):
+            for j in range(b.shape[1]):
+                for k in range(a.shape[1]):
+                    res[i][j] += a[i][k]* b[k][j]
+        if res.shape[1] == 1:
+            res = res.reshape(-1)
+        return res
+
+    param = initialize_parameters_FR(n_x, n_h, n_y)
+    B = np.identity(len(param))
+    niter = 1
+    x0 = param
+    df0 = backward_propagation_gradient(x0)
+    while niter < 1000 and np.linalg.norm(df0) > 1e-4:
+        s = -1* np.matmul(B, df0)
+        _, x1 = find_min(x0, s)
+        df1 = backward_propagation_gradient(x1)
+        if np.linalg.norm(df1) < 1e-4:
+            return niter, arr2dict(x1)
+        lam = np.average((x1-x0)/s)
+        g = df1 - df0
+        M = lam * matrix_multiply_2D(s.reshape(-1,1),s.reshape(-1,1)) / np.inner(s,g)
+        Bg = np.matmul(B,g)
+        N = -1 * matrix_multiply_2D(Bg.reshape(-1,1),Bg.reshape(-1,1)) / np.inner(g,Bg)
+        B = B + M + N
+        losses.append(forward_propagation_loss(x0))
+        # if niter > 10 and abs(losses[-1] - sum(losses[-10:])/10) < 1e-6:
+        #     return niter, arr2dict(x0)
+        x0 = x1
+        df0 = df1
+        niter += 1
+        if niter % 5 == 0:
+            B = np.identity(len(param))
+    return niter, arr2dict(x0)
 
 # 定義訓練迴圈
 
@@ -658,14 +818,14 @@ if __name__ =='__main__':
 
     ## Main training process
     ## orignal gradient descent
-    trained_parameters = training_loop(
-        X,
-        Y,
-        n_x,
-        n_h,
-        n_y,
-        n_epochs,
-        learning_rate)
+    # trained_parameters = training_loop(
+    #     X,
+    #     Y,
+    #     n_x,
+    #     n_h,
+    #     n_y,
+    #     n_epochs,
+    #     learning_rate)
     # reset_times, trained_parameters = Fletcher_Reeves_conjugate_gradient(
     #     X,
     #     Y,
@@ -690,6 +850,15 @@ if __name__ =='__main__':
     #     n_y,
     #     loss_mse,
     # )
+    
+    niter, trained_parameters = Davidon_Fletcher_Powell_method(
+        X,
+        Y,
+        n_x,
+        n_h,
+        n_y,
+        loss_mse,
+    )
 
     # print(f"reset {reset_times} times")
     # 4種組合之測試data
